@@ -1,0 +1,75 @@
+Sub Main()
+    ' Declare document object
+    Dim document As AssemblyDocument
+    document = TryCast(ThisApplication.ActiveDocument, AssemblyDocument)
+
+    ' Check document type
+    If document Is Nothing Then
+        MessageBox.Show("This iLogic rule can only be run on assemblies.", "Invalid Document Type", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        Exit Sub
+    End If
+
+    ' Get selected component
+    Dim selectedComp As ComponentOccurrence
+    selectedComp = ThisApplication.CommandManager.Pick(kAssemblyOccurrenceFilter, "Select a component to copy:")
+
+    ' Check if a component is selected
+    If selectedComp Is Nothing Then
+        MessageBox.Show("No component selected. Exiting.", "Selection Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        Exit Sub
+    End If
+
+    ' Ensure it's a part file
+    If Not TypeOf selectedComp.Definition.Document Is PartDocument Then
+        MessageBox.Show("Please select a part file.", "Invalid Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        Exit Sub
+    End If
+
+    ' Get the original file path and extension
+    Dim originalFilePath As String = selectedComp.Definition.Document.FullFileName
+    Dim originalExt As String = System.IO.Path.GetExtension(originalFilePath)
+
+    ' Get the directory of the current document
+    Dim documentDirectory As String = System.IO.Path.GetDirectoryName(document.FullFileName)
+
+    ' Prompt user for new file name and location
+    Dim newFilePathAndName As String = InputBox("Enter new file name and location (e.g., C:\Path\NewFileName):", "Save Component As:", System.IO.Path.Combine(documentDirectory, System.IO.Path.GetFileNameWithoutExtension(originalFilePath) & "_Copy" & originalExt))
+
+    ' Check if user cancelled the dialog
+    If String.IsNullOrEmpty(newFilePathAndName) Then
+        Exit Sub
+    End If
+
+    ' Extract new file name and path from user input
+    Dim newFilePath As String = System.IO.Path.GetDirectoryName(newFilePathAndName)
+    Dim newFileName As String = System.IO.Path.GetFileName(newFilePathAndName)
+
+    Try
+        ' Create a copy of the file
+        System.IO.File.Copy(originalFilePath, System.IO.Path.Combine(newFilePath, newFileName), True)
+
+        ' Inform user about successful save
+        MessageBox.Show("Component copied successfully as: " & System.IO.Path.Combine(newFilePath, newFileName), "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+        ' Ask if user wants to place the new part in the assembly
+        Dim response As DialogResult
+        response = MessageBox.Show("Do you want to place the new part in the assembly?", "Place New Part", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+
+        If response = DialogResult.Yes Then
+            ' Place the new part in the assembly
+            Dim oMatrix As Matrix
+            oMatrix = ThisApplication.TransientGeometry.CreateMatrix
+            
+            Dim newComp As ComponentOccurrence
+            newComp = document.ComponentDefinition.Occurrences.Add(System.IO.Path.Combine(newFilePath, newFileName), oMatrix)
+            
+            ' Optionally, you can position the new component here
+            ' For example, to place it at the origin:
+            ' newComp.Transform = ThisApplication.TransientGeometry.CreateMatrix
+
+            MessageBox.Show("New part has been placed in the assembly.", "Part Placed", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        End If
+    Catch ex As Exception
+        MessageBox.Show("An error occurred: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+    End Try
+End Sub
